@@ -21,15 +21,19 @@ library(xlsx)
 
 home <- "C:/Users/delph/Desktop/GIS/BCGP/Bike_count/BikeCount2019/"
 inFolder <- "Raw/"
-inTable <- "test4"
+inTable <- "test5"
 outFolder <- "Output/"
+
+currentYear <- 2019
 ```
 
-## Export output to Excel - Start
+## Initialize Excel export output 
+
+We will build the content little by little throughout the script.
 
 ```{r export_to_excel_start}
 
-fileToWrite <- paste(home, outFolder, inTable, "_2_processed.xlsx", sep="")
+fileToWrite <- paste(home, outFolder, inTable, "_3_processed.xlsx", sep="")
 fileToWrite
 
 wb = createWorkbook()
@@ -49,19 +53,28 @@ fullSummarySheet = createSheet(wb, "Full Summary")
 ## Read the raw Excel table 
 
 ```{r read_excel}
-# Read the file
+
+# Create the path
 fileToRead <- paste(home, inFolder, inTable, ".xlsx", sep="")
 fileToRead
 
+# Read the file
 bcDataOrig <- as.data.frame(read_excel(fileToRead))
+
+# Make sure the dataframe contains only rows for the current year
+bcDataOrig <- bcDataOrig[bcDataOrig$"Year" == currentYear, ]
+
 bcData <- bcDataOrig
+bcData
 
 ```
+
 
 ## Do some cleanup and remove superfluous columns
 
 ```{r cleanup}
 
+# Clean up the names of the columns
 names(bcData) = gsub(pattern = "IntersectionsPlusDirections::", 
                      replacement = "", x = names(bcData))
 names(bcData) = gsub(pattern = "Derived ", 
@@ -71,17 +84,17 @@ names(bcData) = gsub(pattern = "Count (.+)$",
 names(bcData)[names(bcData)=="__CountOccurrencePK"] <- "Record ID"
 names(bcData)[names(bcData)=="_IntersectionsFK"] <- "Inters And Direc ID"
 
-#Multiplier For Intersection
-
-bcData$Intersection = ""
+# Add this new variable that we will populate later
 bcData$"Bike Count for Intersec (* 8 or * 4)" = 0
 
-bcData2 <- bcData[c("Record ID",	"Inters And Direc ID", "Bridge vs Roads",	"Intersection",	"Street",	"Direction", "Date",	"Time",	"AM PM",	"Year",	"Facility for Street", "Total Count", "Bikes Per Hour Projected", 	"Bike Count for Intersec (* 8 or * 4)", "Male Count", "Female Count",  "With Traffic Male",	"With Traffic Female",	"Sidewalk Male", "Sidewalk Female", "Wrong Way Male",	"Wrong Way Female", 	"Helmet Male",	"Helmet Female",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses")]
-
-names(bcData)
+# Reorder the columns and drop the ones we don't need
+bcData2 <- bcData[c("Record ID",	"Inters And Direc ID", "Bridge vs Roads",	"Intersection",	"Street",	"Direction", "Date",	"Time",	"AM PM",	"Year",	"Facility for Street", "Total Count", "Bikes Per Hour Projected", "Num of Directions in Intersection",	"Bike Count for Intersec (* 8 or * 4)", "Male Count", "Female Count",  "With Traffic Male",	"With Traffic Female",	"Sidewalk Male", "Sidewalk Female", "Wrong Way Male",	"Wrong Way Female", 	"Helmet Male",	"Helmet Female",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses")]
 
 # Replace NAs with 0
-bcData2[12:27][is.na(bcData2[12:27])] <- 0
+
+numOfCol <- ncol(bcData2)
+
+bcData2[12:numOfCol][is.na(bcData2[12:numOfCol])] <- 0
 
 
 ```
