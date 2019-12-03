@@ -17,23 +17,44 @@ Initialize the paths and names.
 
 ```{r init}
 library(readxl) 
-#library(writexl) 
+library(xlsx)
 
 home <- "C:/Users/delph/Desktop/GIS/BCGP/Bike_count/BikeCount2019/"
 inFolder <- "Raw/"
-inTable <- "test4.xlsx"
+inTable <- "test4"
 outFolder <- "Output/"
 ```
+
+## Export output to Excel - Start
+
+```{r export_to_excel_start}
+
+fileToWrite <- paste(home, outFolder, inTable, "_2_processed.xlsx", sep="")
+fileToWrite
+
+wb = createWorkbook()
+
+# Styles for the data table row/column names
+TABLE_ROWNAMES_STYLE <- CellStyle(wb) + Font(wb, isBold=TRUE)
+TABLE_COLNAMES_STYLE <- CellStyle(wb) + Font(wb, isBold=TRUE) +
+  Alignment(wrapText=TRUE, horizontal="ALIGN_CENTER") 
+
+# Defining some sheets ahead of time to make sure they appear first in the workbook
+shortSummarySheet = createSheet(wb, "Short Summary")
+fullSummarySheet = createSheet(wb, "Full Summary")
+
+```
+
 
 ## Read the raw Excel table 
 
 ```{r read_excel}
 # Read the file
-fileToRead <- paste(home, inFolder, inTable, sep="")
+fileToRead <- paste(home, inFolder, inTable, ".xlsx", sep="")
 fileToRead
-bcData <-read_excel(fileToRead)
 
-bcData
+bcDataOrig <- as.data.frame(read_excel(fileToRead))
+bcData <- bcDataOrig
 
 ```
 
@@ -49,6 +70,8 @@ names(bcData) = gsub(pattern = "Count (.+)$",
                      replacement = "\\1 Count", x = names(bcData))
 names(bcData)[names(bcData)=="__CountOccurrencePK"] <- "Record ID"
 names(bcData)[names(bcData)=="_IntersectionsFK"] <- "Inters And Direc ID"
+
+#Multiplier For Intersection
 
 bcData$Intersection = ""
 bcData$"Bike Count for Intersec (* 8 or * 4)" = 0
@@ -75,15 +98,16 @@ bcData2$"With Traffic" = bcData2$"With Traffic Male" +	bcData2$"With Traffic Fem
 bcData2$"Wrong Way" = bcData2$"Wrong Way Male" +	bcData2$"Wrong Way Female"
 bcData2$"Helmet" = bcData2$"Helmet Male" +	bcData2$"Helmet Female"
 
-fullSummary <- as.data.frame(matrix(ncol=1, nrow=18))
-fullSummary$VarName <- c("Total Count", "Male Count", "Female Count",  "With Traffic", "With Traffic Male",	"With Traffic Female",	"Sidewalk", "Sidewalk Male", "Sidewalk Female", "Wrong Way", "Wrong Way Male",	"Wrong Way Female", 	"Helmet", "Helmet Male",	"Helmet Female",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses")
+fullSummary <- as.data.frame(matrix(ncol=0, nrow=18))
+
+rownames(fullSummary) <- c("Total Count", "Male Count", "Female Count",  "With Traffic", "With Traffic Male",	"With Traffic Female",	"Sidewalk", "Sidewalk Male", "Sidewalk Female", "Wrong Way", "Wrong Way Male",	"Wrong Way Female", 	"Helmet", "Helmet Male",	"Helmet Female",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses")
+
 fullSummary$Totals <- colSums(bcData2[c("Total Count", "Male Count", "Female Count",  "With Traffic", "With Traffic Male",	"With Traffic Female",	"Sidewalk", "Sidewalk Male", "Sidewalk Female", "Wrong Way", "Wrong Way Male",	"Wrong Way Female", 	"Helmet", "Helmet Male",	"Helmet Female",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses")])
 
-  grandTotal <- fullSummary[1, "Totals"]
+grandTotal <- fullSummary["Total Count", "Totals"]
 grandTotal
 
-fullSummary$Percent <- fullSummary$Totals / grandTotal
-
+fullSummary$Percent <- round((fullSummary$Totals / grandTotal)*100, digits = 2)
 fullSummary
 
 #Add BPH based on Bikes Per Hour Projected???
@@ -99,23 +123,84 @@ facilities <- unique(bcData2$"Facility for Street")
 for ( f in facilities){ 
   facilitySubset <- bcData2[bcData2$"Facility for Street" == f, ]
   
+  facilitySubsetSheet <- createSheet(wb, f)
+  
+ #rownames(facilitySubset) <- facilitySubset$"Record ID"
+  
+  addDataFrame(facilitySubset, sheet=facilitySubsetSheet, startColumn=1, row.names=FALSE, 
+                colnamesStyle = TABLE_COLNAMES_STYLE, rownamesStyle = TABLE_ROWNAMES_STYLE)
+
   fullSummary[, f] <- colSums(facilitySubset[c("Total Count", "Male Count", "Female Count",  "With Traffic", "With Traffic Male",	"With Traffic Female",	"Sidewalk", "Sidewalk Male", "Sidewalk Female", "Wrong Way", "Wrong Way Male",	"Wrong Way Female", 	"Helmet", "Helmet Male",	"Helmet Female",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses")])
 
   subGrandTotal <- fullSummary[1, f]
 
   fieldName <- paste(f, "Percent", sep=" ")
   
-  fullSummary[, fieldName] <- fullSummary[, f] / subGrandTotal
+  fullSummary[, fieldName] <- round((fullSummary[, f] / subGrandTotal)*100, digits = 2)
 
   #Add BPH based on Bikes Per Hour Projected???
 
   }
 
-myres <- fullSummary[fullSummary$VarName =="Sidewalk",]
-myres <- fullSummary[fullSummary$VarName =="Helmet",]
-myres <- fullSummary[fullSummary$VarName =="Wrong Way",]
+#myres <- fullSummary[fullSummary$VarName =="Sidewalk",]
+#myres <- fullSummary[fullSummary$VarName =="Helmet",]
+#myres <- fullSummary[fullSummary$VarName =="Wrong Way",]
 
+# facilitySubset <- bcData2[bcData2$"Facility for Street" == f, ]
+  facilitySubset
+```
+
+
+## Generate short summary
+
+```{r compute_subtotals}
+
+shortSummary <- fullSummary
+
+shortSummary <- shortSummary[c("Total Count", "Male Count", "Female Count",  "With Traffic", "Sidewalk", "Wrong Way", "Helmet",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses"),]
+
+# Transpose rows into columns to get a dataframe of 4 columns and 573 rows
+#shortSummary <- data.frame(t(shortSummary))
+
+# Remove the periods that were added in the column names by default
+#names(shortSummary) = gsub(pattern = "\\.", 
+#                     replacement = " ", x = names(shortSummary))
+
+
+shortSummary
 
 ```
+
+
+## Export to Excel - End
+
+```{r export_to_excel_end}
+
+addDataFrame(shortSummary, sheet=shortSummarySheet, startColumn=1, row.names=TRUE, colnamesStyle = TABLE_COLNAMES_STYLE, rownamesStyle = TABLE_ROWNAMES_STYLE)
+
+addDataFrame(fullSummary, sheet=fullSummarySheet, startColumn=1, row.names=TRUE, colnamesStyle = TABLE_COLNAMES_STYLE, rownamesStyle = TABLE_ROWNAMES_STYLE)
+
+bcDataSheet = createSheet(wb, "All Data - Cleaned")
+addDataFrame(bcData, sheet=bcDataSheet, startColumn=1, row.names=FALSE, colnamesStyle = TABLE_COLNAMES_STYLE, rownamesStyle = TABLE_ROWNAMES_STYLE)
+
+
+bcDataOrigSheet = createSheet(wb, "Original Data")
+addDataFrame(bcDataOrig, sheet=bcDataOrigSheet, startColumn=1, row.names=FALSE, colnamesStyle = TABLE_COLNAMES_STYLE, rownamesStyle = TABLE_ROWNAMES_STYLE)
+
+
+saveWorkbook(wb, fileToWrite)
+
+```
+
+
+
+
+
+
+
+
+
+
+
 
 
