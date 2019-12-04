@@ -5,7 +5,7 @@ title: "Main_Analysis"
 # Summary
 
 * Process the survey data for Bike Count. 
-* Input: Single Excel file exported from Filemaker Pro database (987 rows and 47 columns). 
+* Input: Single Excel file exported from Filemaker Pro database (987 rows and 47 columns). It is assumed that ONLY the rows for one single year are present
 * Developed specifically for Bike Count 2019, but should work with any future Bike Count edition, possibly with a few minor adjustments.
 * Output: Produces an Excel file where the data has been restructured and aggregated (XXX columns and XXX rows). 
 
@@ -24,7 +24,6 @@ inFolder <- "Raw/"
 inTable <- "test5"
 outFolder <- "Output/"
 
-currentYear <- 2019
 ```
 
 ## Initialize Excel export output 
@@ -61,9 +60,7 @@ fileToRead
 # Read the file
 bcDataOrig <- as.data.frame(read_excel(fileToRead))
 
-# Make sure the dataframe contains only rows for the current year
-bcDataOrig <- bcDataOrig[bcDataOrig$"Year" == currentYear, ]
-
+# Create a copy of the dataframe to keep the original intact
 bcData <- bcDataOrig
 bcData
 
@@ -85,24 +82,24 @@ names(bcData)[names(bcData)=="__CountOccurrencePK"] <- "Record ID"
 names(bcData)[names(bcData)=="_IntersectionsFK"] <- "Inters And Direc ID"
 
 # Add this new variable that we will populate later
-bcData$"Bike Count for Intersec (* 8 or * 4)" = 0
+bcData$"BPH per Intersection" = 0
 
 # Reorder the columns and drop the ones we don't need
-bcData2 <- bcData[c("Record ID",	"Inters And Direc ID", "Bridge vs Roads",	"Intersection",	"Street",	"Direction", "Date",	"Time",	"AM PM",	"Year",	"Facility for Street", "Total Count", "Bikes Per Hour Projected", "Num of Directions in Intersection",	"Bike Count for Intersec (* 8 or * 4)", "Male Count", "Female Count",  "With Traffic Male",	"With Traffic Female",	"Sidewalk Male", "Sidewalk Female", "Wrong Way Male",	"Wrong Way Female", 	"Helmet Male",	"Helmet Female",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses")]
+bcData2 <- bcData[c("Record ID",	"Inters And Direc ID", "Bridge vs Roads",	"Intersection",	"Street",	"Direction", "Date",	"Time",	"AM PM",	"Year",	"Facility for Street", "Total Count", "Bikes Per Hour Projected", "Num of Directions in Intersection",	"BPH per Intersection", "Male Count", "Female Count",  "With Traffic Male",	"With Traffic Female",	"Sidewalk Male", "Sidewalk Female", "Wrong Way Male",	"Wrong Way Female", 	"Helmet Male",	"Helmet Female",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses", "Pedestrians", "EScooters")]
 
 # Replace NAs with 0
-
 numOfCol <- ncol(bcData2)
-
 bcData2[12:numOfCol][is.na(bcData2[12:numOfCol])] <- 0
-
 
 ```
 
+# Add intermediary columns
 
-## Compute totals
+```{r add_intermediary_columns}
 
-```{r compute_totals}
+# Compute the Bicycle Per Hour equivalent per intersection for each row.
+# This will be used to compute the total average per hour at every intersection
+bcData2$"BPH per Intersection" <- bcData2$"Total Count" * bcData2$"Num of Directions in Intersection" * 4
 
 # Add columns for totals across genders
 bcData2$"With Traffic" = bcData2$"With Traffic Male" +	bcData2$"With Traffic Female"
@@ -110,6 +107,14 @@ bcData2$"Sidewalk" = bcData2$"Sidewalk Male" +	bcData2$"Sidewalk Female"
 bcData2$"With Traffic" = bcData2$"With Traffic Male" +	bcData2$"With Traffic Female"
 bcData2$"Wrong Way" = bcData2$"Wrong Way Male" +	bcData2$"Wrong Way Female"
 bcData2$"Helmet" = bcData2$"Helmet Male" +	bcData2$"Helmet Female"
+
+bcData2
+```
+
+## Compute totals
+
+```{r compute_totals}
+
 
 fullSummary <- as.data.frame(matrix(ncol=0, nrow=18))
 
@@ -123,35 +128,64 @@ grandTotal
 fullSummary$Percent <- round((fullSummary$Totals / grandTotal)*100, digits = 2)
 fullSummary
 
-#Add BPH based on Bikes Per Hour Projected???
+```
+
+## Compute Bikes Per Hour numbers (BPH)
+
+```{r compute_BPH}
+
+BPHSummary <- as.data.frame(matrix(ncol=0, nrow=1))
+rownames(BPHSummary) <- c("BPH")
+
+# Get the list of all bicycle facility types
+facilities <- unique(bcData2$"Facility for Street")
+
+# For each facility type
+for ( f in facilities){ 
+  #Get the subset all all entry rows for that facility type:
+  facilitySubset <- bcData2[bcData2$"Facility for Street" == f, ]
+
+  BPHSummary[, f] <- round(sum(facilitySubset$"Bikes Per Hour Projected")/nrow(facilitySubset), 2)
+}
+
 
 ```
 
-## Compute subtotals
+## Compute subtotals by bicycle facility type
 
-```{r compute_subtotals}
+```{r compute_subtotals_facilities}
 
-facilities <- unique(bcData2$"Facility for Street")
-
+# For each facility type
 for ( f in facilities){ 
+  #Get the subset all all entry rows for that facility type:
   facilitySubset <- bcData2[bcData2$"Facility for Street" == f, ]
   
+  # Put that subset into the Excel workbook as a new sheet for export purposes
   facilitySubsetSheet <- createSheet(wb, f)
-  
- #rownames(facilitySubset) <- facilitySubset$"Record ID"
-  
-  addDataFrame(facilitySubset, sheet=facilitySubsetSheet, startColumn=1, row.names=FALSE, 
-                colnamesStyle = TABLE_COLNAMES_STYLE, rownamesStyle = TABLE_ROWNAMES_STYLE)
+  addDataFrame(facilitySubset, sheet=facilitySubsetSheet, startColumn=1, 
+               row.names=FALSE, colnamesStyle = TABLE_COLNAMES_STYLE, 
+               rownamesStyle = TABLE_ROWNAMES_STYLE)
 
-  fullSummary[, f] <- colSums(facilitySubset[c("Total Count", "Male Count", "Female Count",  "With Traffic", "With Traffic Male",	"With Traffic Female",	"Sidewalk", "Sidewalk Male", "Sidewalk Female", "Wrong Way", "Wrong Way Male",	"Wrong Way Female", 	"Helmet", "Helmet Male",	"Helmet Female",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses")])
+  # Turn the Record ID column into the row names
+  rownames(facilitySubset) <- facilitySubset$"Record ID"
+  
+  # Compute the column totals for the subsets and add them to the 
+  # fullSummary dataset in a new column with the name of the bike facility (f)
+  fullSummary[, f] <- colSums(facilitySubset[c("Total Count",  
+                          "Male Count", 
+                          "Female Count",  "With Traffic", "With Traffic Male",	
+                          "With Traffic Female",	"Sidewalk", "Sidewalk Male", 
+                          "Sidewalk Female", "Wrong Way", "Wrong Way Male",	
+                          "Wrong Way Female", 	"Helmet", "Helmet Male",	
+                          "Helmet Female",	"Bikes Share Users", 	
+                          "Bike Share Sidewalk Wrong Way",	"Bikes on Buses")])
 
+  # Retrieve the total bike count for the current bike facility
   subGrandTotal <- fullSummary[1, f]
 
+  # Creare a new column called "[bike facility name] Percent", and put in it the %s
   fieldName <- paste(f, "Percent", sep=" ")
-  
   fullSummary[, fieldName] <- round((fullSummary[, f] / subGrandTotal)*100, digits = 2)
-
-  #Add BPH based on Bikes Per Hour Projected???
 
   }
 
@@ -159,8 +193,66 @@ for ( f in facilities){
 #myres <- fullSummary[fullSummary$VarName =="Helmet",]
 #myres <- fullSummary[fullSummary$VarName =="Wrong Way",]
 
-# facilitySubset <- bcData2[bcData2$"Facility for Street" == f, ]
-  facilitySubset
+```
+
+
+## Compute Bikes Per Hour numbers (BPH)
+
+```{r compute_BPH_intersection}
+
+# Get the list of all bicycle facility types
+intersections <- unique(bcData2$"Intersection")
+#intersections
+
+# For each intersection 
+for ( i in intersections){ 
+  #Get the subset all all entry rows for that intersection:
+  intersectionSubset <- bcData2[bcData2$"Intersection" == i, ]
+ 
+  BPHSummary[, i] <- round(sum(intersectionSubset$"BPH per Intersection")/nrow(intersectionSubset), 2)
+}
+
+
+```
+
+
+## Compute subtotals by intersection
+
+```{r compute_subtotals_intersection}
+
+
+# For each intersection 
+for ( i in intersections){ 
+  #Get the subset all all entry rows for that intersection:
+  intersectionSubset <- bcData2[bcData2$"Intersection" == i, ]
+  
+  # Put that subset into the Excel workbook as a new sheet for export purposes
+  intersectionSubsetSheet <- createSheet(wb, i)
+  addDataFrame(intersectionSubset, sheet=intersectionSubsetSheet, startColumn=1, 
+               row.names=FALSE, colnamesStyle = TABLE_COLNAMES_STYLE, 
+               rownamesStyle = TABLE_ROWNAMES_STYLE)
+
+  # Turn the Record ID column into the row names
+  rownames(intersectionSubset) <- intersectionSubset$"Record ID"
+  
+  # Compute the column totals for the subsets and add them to the 
+  # fullSummary dataset in a new column with the name of the intersection (f)
+  fullSummary[, i] <- colSums(intersectionSubset[c("Total Count", "Male Count", 
+                          "Female Count",  "With Traffic", "With Traffic Male",	
+                          "With Traffic Female",	"Sidewalk", "Sidewalk Male", 
+                          "Sidewalk Female", "Wrong Way", "Wrong Way Male",	
+                          "Wrong Way Female", 	"Helmet", "Helmet Male",	
+                          "Helmet Female",	"Bikes Share Users", 	
+                          "Bike Share Sidewalk Wrong Way",	"Bikes on Buses")])
+
+  # Retrieve the total bike count for the current intersection
+  subGrandTotal <- fullSummary[1, i]
+
+  # Creare a new column called "[intersection name] Percent", and put in it the %s
+  fieldName <- paste(i, "Percent", sep=" ")
+  fullSummary[, fieldName] <- round((fullSummary[, i] / subGrandTotal)*100, digits = 2)
+
+  }
 ```
 
 
@@ -172,7 +264,8 @@ shortSummary <- fullSummary
 
 shortSummary <- shortSummary[c("Total Count", "Male Count", "Female Count",  "With Traffic", "Sidewalk", "Wrong Way", "Helmet",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses"),]
 
-# Transpose rows into columns to get a dataframe of 4 columns and 573 rows
+# NOT USED
+# Transpose rows into columns 
 #shortSummary <- data.frame(t(shortSummary))
 
 # Remove the periods that were added in the column names by default
