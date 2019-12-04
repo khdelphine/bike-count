@@ -11,7 +11,7 @@ title: "Main_Analysis"
 
 * Last modified: 12/03/2019
 
-# 1. Init
+# ** 1. Init
 
 ## Initialize the paths and names. 
 
@@ -27,7 +27,7 @@ outFolder <- "Output/"
 ```
 
 
-# 2. Read data and prepare it
+# ** 2. Read data and prepare it
 
 ## Read the raw Excel input spreadsheet 
 
@@ -94,6 +94,8 @@ bcData2
 ```
 
 
+# ** 3. Compute Bikes Per Hour (BPH) numbers
+
 ## Make lists of names
 
 ```{r make_lists_of_names}
@@ -103,25 +105,15 @@ bridgeNames <- unique(bcData2[bcData2$"Bridge vs Roads" == "Bridge" ,]
                       $Intersection)
 
 # Get the list of all street intersection names
-streetIntersectionNames <- unique(bcData2[bcData2$"Bridge vs Roads" == "Road" ,]
-                            $Intersection)
-
-# Get the list of all bicycle facility names
-streetNames <- unique(bcData2[bcData2$"Bridge vs Roads" == "Road" ,]
-                            $Street)
+streetIntersectionNames <- unique(bcData2[bcData2$"Bridge vs Roads" == "Road" ,]$Intersection)
 
 # Get the list of all bicycle facility names
 facilityNames <- unique(bcData2$"Facility for Street")
 
 bridgeNames
 streetIntersectionNames
-streetNames
 facilityNames
 ```
-
-
-# 3. Compute Bikes Per Hour (BPH) numbers
-
 ## Compute BPH by bicycle facilities
 
 ```{r compute_BPH_facilities}
@@ -174,33 +166,57 @@ BPHSummary
 
 ```
 
-# 4. Compute Bikes Per Hour (BPH) numbers for individual streets
+# ** 4. Compute Bikes Per Hour (BPH) numbers for individual streets
+
+We put this in a different dataframe since it is different enough.
+
+## Prepare subset and make lists of names
+
+```{r make_lists_of_names}
+
+# Create road subset
+roadSubset <- bcData2[bcData2$"Bridge vs Roads" == "Road" ,]
+
+# Add composed names for individual street names in the road subset, such as "Pine@21st"
+roadSubset$PrettyStreetName <- roadSubset$Intersection
+roadSubset$PrettyStreetName <- mapply(gsub, pattern=roadSubset$Street, 
+                                   x=roadSubset$PrettyStreetName, replacement="")
+roadSubset$PrettyStreetName <- gsub(pattern = "\\sand\\s", 
+                     replacement = "", roadSubset$PrettyStreetName)
+roadSubset$PrettyStreetName <- paste(roadSubset$Street, "@", roadSubset$PrettyStreetName, sep="" )
+
+
+# Get the list of all individual street names
+individualStreetNames <- unique(roadSubset$PrettyStreetName)
+
+roadSubset
+individualStreetNames
+
+```
+
 
 ## Compute BPH by street
 
 ```{r compute_BPH_by_street}
 
 streetBPHSummary <- as.data.frame(matrix(ncol=0, nrow=1))
-rownames(BPHStreetSummary) <- c("individual street BPH")
+rownames(streetBPHSummary) <- c("individual street BPH")
 
 # For each street  
-for ( s in streetNames){ 
-  print(s)
+for ( i in individualStreetNames){ 
   #Get the subset of all entry rows for that intersection:
-  streetSubset <- bcData2[bcData2$"Street" == s, ]
+  streetSubset <- roadSubset[roadSubset$PrettyStreetName == i, ]
  
-  streetBPHSummary[, s] <- round(sum(
+  streetBPHSummary[, i] <- round(sum(
     streetSubset$"Bikes Per Hour Projected")/nrow(streetSubset), 2)
 }
 
-streetSubset$"Bikes Per Hour Projected"
 streetBPHSummary
-streetSubset
 
 ```
 
 
-# 4.Bicyclist behavior
+# ** 5. Bicyclist behavior
 
 ## Compute aggregated totals by behavior
 
@@ -259,7 +275,7 @@ for ( f in facilityNames){
 ```
 
 
-## Generate short summary
+## Generate short behavior summary
 
 ```{r compute_subtotals}
 
@@ -276,11 +292,11 @@ shortBehaviorSummary <- shortBehaviorSummary[c("Total Count", "Male Count", "Fem
 #                     replacement = " ", x = names(shortSummary))
 
 
-shortSummary
+shortBehaviorSummary
 
 ```
 
-# Create Excel output
+# ** 6. Create Excel output
 
 ## Initialize Excel workbook and set it up 
 
@@ -305,6 +321,8 @@ shortBehaviorSummarySheet = createSheet(wb, "Behavior Summary (Short)")
 behaviorSummarySheet = createSheet(wb, "Behavior Summary (Long)")
 
 ```
+
+
 ## Add bicycle facility subset to the Excel workbook 
 
 ```{r export_facilities}
@@ -322,6 +340,8 @@ for ( f in facilityNames){
                rownamesStyle = TABLE_ROWNAMES_STYLE)
 }
 ```
+
+
 ## Add bridge subset to the Excel workbook 
 
 ```{r export_bridges}
@@ -339,6 +359,8 @@ for ( f in facilityNames){
 }
 
 ```
+
+
 ## Add street intersection subset to the Excel workbook 
 
 ```{r export_street_intersection}
