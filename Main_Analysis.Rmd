@@ -81,7 +81,8 @@ bcData2
 
 # Compute the Bicycle Per Hour equivalent per intersection for each row.
 # This will be used to compute the total average per hour at every intersection
-bcData2$"BPH per Intersection" <- bcData2$"Total Count" * bcData2$"Num of Directions in Intersection" * 4
+bcData2$"BPH per Intersection" <- bcData2$"Total Count" * 
+  bcData2$"Num of Directions in Intersection" * 4
 
 # Add columns for totals across genders
 bcData2$"With Traffic" = bcData2$"With Traffic Male" +	bcData2$"With Traffic Female"
@@ -183,7 +184,7 @@ roadSubset$PrettyStreetName <- mapply(gsub, pattern=roadSubset$Street,
                                    x=roadSubset$PrettyStreetName, replacement="")
 roadSubset$PrettyStreetName <- gsub(pattern = "\\sand\\s", 
                      replacement = "", roadSubset$PrettyStreetName)
-roadSubset$PrettyStreetName <- paste(roadSubset$Street, "@", roadSubset$PrettyStreetName, sep="" )
+roadSubset$PrettyStreetName <- paste(roadSubset$Street, "(@", roadSubset$PrettyStreetName,")", sep="" )
 
 
 # Get the list of all individual street names
@@ -222,11 +223,11 @@ streetBPHSummary
 
 ```{r compute_totals_by_behavior}
 
-behaviorSummary <- as.data.frame(matrix(ncol=0, nrow=18))
+behaviorSummary <- as.data.frame(matrix(ncol=0, nrow=20))
 
-rownames(behaviorSummary) <- c("Total Count", "Male Count", "Female Count",  "With Traffic", "With Traffic Male",	"With Traffic Female",	"Sidewalk", "Sidewalk Male", "Sidewalk Female", "Wrong Way", "Wrong Way Male",	"Wrong Way Female", 	"Helmet", "Helmet Male",	"Helmet Female",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses")
+rownames(behaviorSummary) <- c("Total Count", "Male Count", "Female Count",  "With Traffic", "With Traffic Male",	"With Traffic Female",	"Sidewalk", "Sidewalk Male", "Sidewalk Female", "Wrong Way", "Wrong Way Male",	"Wrong Way Female", 	"Helmet", "Helmet Male",	"Helmet Female",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses", "Pedestrians", "EScooters")
 
-behaviorSummary$Totals <- colSums(bcData2[c("Total Count", "Male Count", "Female Count",  "With Traffic", "With Traffic Male",	"With Traffic Female",	"Sidewalk", "Sidewalk Male", "Sidewalk Female", "Wrong Way", "Wrong Way Male",	"Wrong Way Female", 	"Helmet", "Helmet Male",	"Helmet Female",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses")])
+behaviorSummary$Totals <- colSums(bcData2[c("Total Count", "Male Count", "Female Count",  "With Traffic", "With Traffic Male",	"With Traffic Female",	"Sidewalk", "Sidewalk Male", "Sidewalk Female", "Wrong Way", "Wrong Way Male",	"Wrong Way Female", 	"Helmet", "Helmet Male",	"Helmet Female",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses", "Pedestrians", "EScooters")])
 
 grandTotal <- behaviorSummary["Total Count", "Totals"]
 grandTotal
@@ -257,7 +258,7 @@ for ( f in facilityNames){
                           "Sidewalk Female", "Wrong Way", "Wrong Way Male",	
                           "Wrong Way Female", 	"Helmet", "Helmet Male",	
                           "Helmet Female",	"Bikes Share Users", 	
-                          "Bike Share Sidewalk Wrong Way",	"Bikes on Buses")])
+                          "Bike Share Sidewalk Wrong Way",	"Bikes on Buses",  "Pedestrians", "EScooters")])
 
   # Retrieve the total bike count for the current bike facility
   subGrandTotal <- behaviorSummary[1, f]
@@ -281,16 +282,7 @@ for ( f in facilityNames){
 
 shortBehaviorSummary <- behaviorSummary
 
-shortBehaviorSummary <- shortBehaviorSummary[c("Total Count", "Male Count", "Female Count",  "With Traffic", "Sidewalk", "Wrong Way", "Helmet",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses"),]
-
-# NOT USED
-# Transpose rows into columns 
-#shortSummary <- data.frame(t(shortSummary))
-
-# Remove the periods that were added in the column names by default
-#names(shortSummary) = gsub(pattern = "\\.", 
-#                     replacement = " ", x = names(shortSummary))
-
+shortBehaviorSummary <- shortBehaviorSummary[c("Total Count", "Male Count", "Female Count",  "With Traffic", "Sidewalk", "Wrong Way", "Helmet",	"Bikes Share Users", 	"Bike Share Sidewalk Wrong Way",	"Bikes on Buses", "Pedestrians", "EScooters"),]
 
 shortBehaviorSummary
 
@@ -303,7 +295,7 @@ shortBehaviorSummary
 ```{r export_to_excel_start}
 
 # Put the file path together
-fileToWrite <- paste(home, outFolder, inTable, "_4_processed.xlsx", sep="")
+fileToWrite <- paste(home, outFolder, inTable, "_processed.xlsx", sep="")
 fileToWrite
 
 # Create the workbook
@@ -315,10 +307,9 @@ TABLE_COLNAMES_STYLE <- CellStyle(wb) + Font(wb, isBold=TRUE) +
   Alignment(wrapText=TRUE, horizontal="ALIGN_CENTER") 
 
 # Define some sheets ahead of time to make sure they appear first in the workbook
-BPHSummarySheet = createSheet(wb, "BPH Summary")
-streetBPHSummarySheet = createSheet(wb, "Street BPH Summary")
-shortBehaviorSummarySheet = createSheet(wb, "Behavior Summary (Short)")
-behaviorSummarySheet = createSheet(wb, "Behavior Summary (Long)")
+shortBehaviorSummarySheet = createSheet(wb, "Behavior Aggregation")
+BPHSummarySheet = createSheet(wb, "BPH (Facilities & Intersec.)")
+streetBPHSummarySheet = createSheet(wb, "BPH (Streets)")
 
 ```
 
@@ -385,19 +376,18 @@ for ( i in streetIntersectionNames){
 
 ```{r export_to_excel_end}
 
-addDataFrame(BPHSummary, sheet=BPHSummarySheet, startColumn=1, row.names=TRUE, colnamesStyle = TABLE_COLNAMES_STYLE, rownamesStyle = TABLE_ROWNAMES_STYLE)
-
-addDataFrame(streetBPHSummary, sheet=streetBPHSummarySheet, startColumn=1, row.names=TRUE, colnamesStyle = TABLE_COLNAMES_STYLE, rownamesStyle = TABLE_ROWNAMES_STYLE)
-
 addDataFrame(shortBehaviorSummary, sheet=shortBehaviorSummarySheet, startColumn=1, row.names=TRUE, colnamesStyle = TABLE_COLNAMES_STYLE, rownamesStyle = TABLE_ROWNAMES_STYLE)
 
-addDataFrame(behaviorSummary, sheet=behaviorSummarySheet, startColumn=1, row.names=TRUE, colnamesStyle = TABLE_COLNAMES_STYLE, rownamesStyle = TABLE_ROWNAMES_STYLE)
+addDataFrame(BPHSummary, sheet=BPHSummarySheet, startColumn=1, row.names=TRUE, colnamesStyle = TABLE_COLNAMES_STYLE, rownamesStyle = TABLE_ROWNAMES_STYLE)
+
+addDataFrame(streetBPHSummary, sheet=streetBPHSummarySheet, startColumn=1,row.names=TRUE, colnamesStyle = TABLE_COLNAMES_STYLE, rownamesStyle = TABLE_ROWNAMES_STYLE, )
+#setColWidths(wb, streetBPHSummary, 1:ncol(streetBPHSummary), widths = 20)
 
 bcDataSheet = createSheet(wb, "All Data - Cleaned")
-addDataFrame(bcData, sheet=bcDataSheet, startColumn=1, row.names=FALSE, colnamesStyle = TABLE_COLNAMES_STYLE, rownamesStyle = TABLE_ROWNAMES_STYLE)
+addDataFrame(bcData2, sheet=bcDataSheet, startColumn=1, row.names=FALSE, colnamesStyle = TABLE_COLNAMES_STYLE, rownamesStyle = TABLE_ROWNAMES_STYLE)
 
 
-bcDataOrigSheet = createSheet(wb, "Original Data")
+bcDataOrigSheet = createSheet(wb, "Original Export")
 addDataFrame(bcDataOrig, sheet=bcDataOrigSheet, startColumn=1, row.names=FALSE, colnamesStyle = TABLE_COLNAMES_STYLE, rownamesStyle = TABLE_ROWNAMES_STYLE)
 
 
